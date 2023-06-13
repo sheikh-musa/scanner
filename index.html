@@ -7,8 +7,15 @@
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
 <div id="reader" style="width: 300px; height: 300px"></div>
-<div id="totalTickets">Total Tickets:</div>
-<div id="lastTenTickets">Last 10 Tickets:</div>
+<br />
+<table id="ticketsTable">
+	<tr>
+		<th>Ticket Number</th>
+		<th>Time Scanned</th>
+	</tr>
+</table>
+<br />
+<div id="totalTickets"></div>
 <script>
 	var config = {
 		apiKey: "AIzaSyBWucjBiE2WDUJy20hsTWV5lLUfYkPyXdQ",
@@ -33,9 +40,27 @@
 
 		const last10ScannedTickets = scannedTickets.slice(0, 10);
 
-		document.getElementById("totalTickets").textContent = "Total Tickets: " + scannedTickets.length;
-		document.getElementById("lastTenTickets").textContent =
-			"Last 10 Tickets: " + last10ScannedTickets.map((ticket) => ticket.number).join(", ");
+		document.getElementById("totalTickets").textContent =
+			"Total Tickets Scanned: " + scannedTickets.length;
+
+		// Clear the table.
+		const table = document.getElementById("ticketsTable");
+		table.innerHTML = `
+		<tr>
+			<th>Ticket Number</th>
+			<th>Time Scanned</th>
+		</tr>
+		${last10ScannedTickets
+			.map(
+				(ticket) => `
+			<tr>
+				<td>${ticket.number}</td>
+				<td>${new Date(ticket.timestamp.toDate()).toLocaleString()}</td>
+			</tr>
+		`
+			)
+			.join("")}
+	`;
 	});
 
 	function onScanSuccess(decodedText, decodedResult) {
