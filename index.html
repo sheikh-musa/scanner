@@ -3,127 +3,78 @@
 	src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"
 	type="text/javascript"
 ></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
 
 <div id="reader" style="width: 300px; height: 300px"></div>
 <div id="totalTickets">Total Tickets:</div>
 <div id="lastTenTickets">Last 10 Tickets:</div>
 <script>
-	// TODO: Initialize Firebase.
 	var config = {
 		apiKey: "AIzaSyBWucjBiE2WDUJy20hsTWV5lLUfYkPyXdQ",
 		authDomain: "mvj-scanner.firebaseapp.com",
-		databaseURL: "https://mvj-scanner-default-rtdb.asia-southeast1.firebasedatabase.app",
 		projectId: "mvj-scanner",
-		storageBucket: "mvj-scanner.appspot.com",
-		messagingSenderId: "428336177215",
-		appId: "1:428336177215:web:9bf9b70fb995d4fedb988a",
-		measurementId: "G-BF2DNZ41HL",
 	};
 
 	firebase.initializeApp(config);
-	var database = firebase.database();
 
-	// Initialize the QR code reader.
+	const db = firebase.firestore();
+	const ticketsCollection = db.collection("tickets");
+
 	var html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
 	html5QrcodeScanner.render(onScanSuccess, onScanFailure);
-	var scannedTicketsRef = database.ref("scannedTickets");
-	scannedTicketsRef.on("value", function (snapshot) {
-		// Get the scanned tickets array from the snapshot.
-		var scannedTickets = snapshot.val();
 
-		// If scannedTickets is null (i.e., there are no scanned tickets yet), set it to an empty array.
-		if (scannedTickets === null) {
-			scannedTickets = [];
-		}
+	ticketsCollection.orderBy("timestamp", "desc").onSnapshot((snapshot) => {
+		const scannedTickets = [];
+		snapshot.forEach((doc) => {
+			const ticket = doc.data();
+			scannedTickets.push(ticket);
+		});
 
-		// Sort the tickets by timestamp in descending order and take the first 10 tickets.
-		var last10ScannedTickets = scannedTickets
-			.sort((a, b) => b.timestamp - a.timestamp)
-			.slice(0, 10);
+		const last10ScannedTickets = scannedTickets.slice(0, 10);
 
-		// Update the total tickets and last 10 tickets.
 		document.getElementById("totalTickets").textContent = "Total Tickets: " + scannedTickets.length;
 		document.getElementById("lastTenTickets").textContent =
 			"Last 10 Tickets: " + last10ScannedTickets.map((ticket) => ticket.number).join(", ");
 	});
-	function onScanSuccess(decodedText, decodedResult) {
-		// Retrieve the array of scanned tickets from the database.
-		// var scannedTicketsRef = database.ref("scannedTickets");
 
-		// Check the ticket in the database.
-		var ticketRef = database.ref("tickets/" + decodedText);
-		ticketRef.once("value", function (snapshot) {
-			if (snapshot.exists()) {
-				// alert("This code has already been scanned.");
-				Toastify({
-					text: "Ticket " + decodedText + " has already been scanned.",
-					duration: 3000,
-					gravity: "bottom", // `top` or `bottom`
-					position: "center", // `left`, `center` or `right`
-					stopOnFocus: true, // Prevents dismissing of toast on hover
-					style: {
-						// background: "linear-gradient(to right, #00b09b, #96c93d)",
-						background: "red",
-					},
-					onClick: function () {}, // Callback after click
-				}).showToast();
-			} else {
+	function onScanSuccess(decodedText, decodedResult) {
+		const ticketRef = ticketsCollection.doc(decodedText);
+		ticketRef.get().then((doc) => {
+			if (!doc.exists) {
 				ticketRef.set({
 					number: decodedText,
-					isScanned: true,
-					timestamp: Date.now(),
+					timestamp: firebase.firestore.FieldValue.serverTimestamp(),
 				});
-				// alert("Ticket scanned!");
+
 				Toastify({
 					text: "Ticket " + decodedText + " successfully scanned.",
 					duration: 3000,
-					gravity: "bottom", // `top` or `bottom`
-					position: "center", // `left`, `center` or `right`
-					stopOnFocus: true, // Prevents dismissing of toast on hover
+					gravity: "bottom",
+					position: "center",
+					stopOnFocus: true,
 					style: {
-						// background: "linear-gradient(to right, #00b09b, #96c93d)",
 						background: "green",
 					},
-					onClick: function () {}, // Callback after click
+					onClick: function () {},
 				}).showToast();
-
-				// Add the ticket to the array of scanned tickets.
-				scannedTicketsRef.transaction(function (scannedTickets) {
-					// Check if scannedTickets is null and if so, set it to an empty array.
-					if (scannedTickets === null) {
-						scannedTickets = [];
-					}
-					// Add the new ticket to the beginning of the array.
-					scannedTickets.unshift({
-						number: decodedText,
-						timestamp: Date.now(),
-					});
-
-					// If there are more than 10 tickets in the array, remove the oldest one.
-					if (scannedTickets.length > 10) {
-						scannedTickets.pop();
-					}
-
-					// Update the total tickets and last 10 tickets.
-					document.getElementById("totalTickets").textContent =
-						"Total Tickets: " + scannedTickets.length;
-					document.getElementById("lastTenTickets").textContent =
-						"Last 10 Tickets: " +
-						scannedTickets
-							.slice(0, 10)
-							.map((ticket) => ticket.number)
-							.join(", ");
-
-					return scannedTickets;
-				});
+			} else {
+				Toastify({
+					text: "Ticket " + decodedText + " has already been scanned.",
+					duration: 3000,
+					gravity: "bottom",
+					position: "center",
+					stopOnFocus: true,
+					style: {
+						background: "red",
+					},
+					onClick: function () {},
+				}).showToast();
 			}
 		});
 	}
 
 	function onScanFailure(error) {
-		// TODO: Handle scan failures.
-		// console.log(error);
+		// console.error(error);
 	}
 </script>
